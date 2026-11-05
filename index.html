@@ -73,7 +73,7 @@
     <video id="liveFeed" class="hidden" autoplay playsinline muted></video>
 
     <!-- Video Principal en Pantalla Completa (Delay / Slow-Mo) -->
-    <video id="delayedPlayback" class="w-full h-full object-cover pointer-events-none transition-transform duration-300" autoplay playsinline></video>
+    <video id="delayedPlayback" class="w-full h-full object-cover pointer-events-none transition-transform duration-300" autoplay playsinline muted></video>
 
     <!-- Canvas de Fallback o procesamiento visual si es requerido -->
     <canvas id="bufferCanvas" class="hidden"></canvas>
@@ -107,7 +107,7 @@
       <!-- Ajustes Generales -->
       <button id="btnSettings" title="Ajustes" class="hud-glass hud-button w-12 h-12 rounded-full flex items-center justify-center text-white shadow-xl">
         <svg class="w-6 h-6 stroke-current fill-none stroke-[2]" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756 1.086 1.756 3.582 0 4.668a1.724 1.724 0 00-1.065 2.572c.94 1.543-.827 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.065c-1.543.94-3.31-.827-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-1.086-1.756-3.582 0-4.668a1.724 1.724 0 001.065-2.572c-.94-1.543.827-3.31 2.37-2.37a1.724 1.724 0 002.573-1.066z"/>
           <circle cx="12" cy="12" r="3"/>
         </svg>
       </button>
@@ -292,7 +292,7 @@
           <select id="selectDeviceList" class="bg-neutral-800 text-white rounded-xl p-2.5 border border-white/20 text-xs w-full"></select>
 
           <div class="text-[11px] text-neutral-400 leading-relaxed bg-white/5 p-3 rounded-xl border border-white/5">
-            💡 <strong>Consejo para entrenadores:</strong> Para cero latencia con GoPro en el borde de la pileta, conecta la salida Micro-HDMI de la GoPro a una capturadora USB-C Video UVC conectada al iPad.
+            💡 <strong>Consejo para entrenadores:</strong> Para cero latencia con GoPro en el borde de la pileta, conecta la salida Micro-HDMI de la GoPro a una capturadora USB-C Video UVC conectada a la tablet.
           </div>
         </div>
 
