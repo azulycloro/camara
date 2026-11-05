@@ -1,794 +1,227 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Swim Delay Pro - Análisis de Natación</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    /* Reset táctil para iPad y móvil */
-    * {
-      -webkit-touch-callout: none;
-      -webkit-user-select: none;
-      user-select: none;
-      touch-action: manipulation;
-    }
-    input[type="range"] {
-      touch-action: pan-x;
-    }
-
-    /* Efectos de cristal para controles HUD */
-    .hud-glass {
-      background: rgba(18, 24, 38, 0.45);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border: 1px solid rgba(255, 255, 255, 0.18);
-    }
-
-    .hud-button {
-      transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    .hud-button:active {
-      transform: scale(0.92);
-      background: rgba(255, 255, 255, 0.25);
-    }
-
-    /* Rueda de tiempo (Scrubber / Wheel) */
-    .timeline-scrubber::-webkit-slider-thumb {
-      appearance: none;
-      width: 22px;
-      height: 22px;
-      border-radius: 50%;
-      background: #06b6d4;
-      border: 2px solid #ffffff;
-      box-shadow: 0 0 10px rgba(6, 182, 212, 0.8);
-      cursor: pointer;
-    }
-
-    /* Sliders verticales/horizontales */
-    input[type=range] {
-      accent-color: #06b6d4;
-    }
-
-    /* Espejo de video */
-    .mirrored {
-      transform: scaleX(-1) !important;
-    }
-
-    /* Animación pulso para modo Live / Grabando */
-    @keyframes liveGlow {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
-    }
-    .live-dot {
-      animation: liveGlow 1.4s ease-in-out infinite;
-    }
-  </style>
-</head>
-<body class="bg-black text-white h-screen w-screen overflow-hidden font-sans select-none">
-
-  <!-- ÁREA DE VIDEO DE PANTALLA COMPLETA -->
-  <div class="relative w-full h-full overflow-hidden bg-neutral-950 flex items-center justify-center">
-    <!-- Video en Vivo Oculto (Fuente para el búfer circular) -->
-    <video id="liveFeed" class="hidden" autoplay playsinline muted></video>
-
-    <!-- Video Principal en Pantalla Completa (Delay / Slow-Mo) -->
-    <video id="delayedPlayback" class="w-full h-full object-cover pointer-events-none transition-transform duration-300" autoplay playsinline muted></video>
-
-    <!-- Canvas de Fallback o procesamiento visual si es requerido -->
-    <canvas id="bufferCanvas" class="hidden"></canvas>
-
-    <!-- Indicador de Estado Superior Central -->
-    <div id="statusBadge" class="absolute top-6 px-4 py-1.5 rounded-full hud-glass flex items-center gap-2.5 shadow-lg border border-white/10 z-20 pointer-events-none">
-      <span id="recordIndicator" class="w-3 h-3 rounded-full bg-emerald-500 live-dot"></span>
-      <span id="statusText" class="text-xs font-semibold tracking-wider uppercase text-neutral-200">BUFFER INICIANDO</span>
-      <span class="text-neutral-500">|</span>
-      <span id="delayBadge" class="text-xs font-mono font-bold text-cyan-400">DELAY: 15s</span>
-      <span id="speedBadge" class="text-xs font-mono font-bold text-amber-400">1.00x</span>
-    </div>
-
-    <!-- CONTROLES SUPERIORES -->
-    <!-- Margen Superior Izquierdo: Selección Cámara, Espejo, Ajustes -->
-    <div class="absolute top-6 left-6 flex flex-col gap-3.5 z-30">
-      <!-- Alternar Cámara Frontal / Trasera -->
-      <button id="btnFlipCamera" title="Cambiar Cámara" class="hud-glass hud-button w-12 h-12 rounded-full flex items-center justify-center text-white shadow-xl">
-        <svg class="w-6 h-6 stroke-current fill-none stroke-[2]" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M16 3h5v5M4 20L21 3m-5 18h5v-5M9 21H4v-5M3 4l18 17"/>
-        </svg>
-      </button>
-
-      <!-- Modo Espejo -->
-      <button id="btnMirror" title="Modo Espejo" class="hud-glass hud-button w-12 h-12 rounded-full flex items-center justify-center text-white shadow-xl">
-        <svg class="w-6 h-6 stroke-current fill-none stroke-[2]" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v18m7-14l-7 7 7 7M5 9l7 7-7 7"/>
-        </svg>
-      </button>
-
-      <!-- Ajustes Generales -->
-      <button id="btnSettings" title="Ajustes" class="hud-glass hud-button w-12 h-12 rounded-full flex items-center justify-center text-white shadow-xl">
-        <svg class="w-6 h-6 stroke-current fill-none stroke-[2]" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756 1.086 1.756 3.582 0 4.668a1.724 1.724 0 00-1.065 2.572c.94 1.543-.827 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.065c-1.543.94-3.31-.827-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-1.086-1.756-3.582 0-4.668a1.724 1.724 0 001.065-2.572c-.94-1.543.827-3.31 2.37-2.37a1.724 1.724 0 002.573-1.066z"/>
-          <circle cx="12" cy="12" r="3"/>
-        </svg>
-      </button>
-    </div>
-
-    <!-- Margen Superior Derecho: Cámara Externa / GoPro -->
-    <div class="absolute top-6 right-6 z-30">
-      <button id="btnExternalCam" title="Cámara Externa / GoPro" class="hud-glass hud-button w-12 h-12 rounded-full flex items-center justify-center text-white shadow-xl">
-        <svg class="w-6 h-6 stroke-current fill-none stroke-[2]" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
-        </svg>
-      </button>
-    </div>
-
-    <!-- CONTROLES INFERIORES FLOTANTES -->
-    <div class="absolute bottom-6 left-0 right-0 flex flex-col items-center gap-4 px-6 z-30 pointer-events-none">
-      
-      <!-- Fila de Botones de Control Principal -->
-      <div class="flex items-center justify-center gap-5 sm:gap-7 pointer-events-auto">
-        <!-- Botón Galería -->
-        <button id="btnGallery" title="Galería de Clips" class="hud-glass hud-button w-13 h-13 p-3 rounded-full flex flex-col items-center justify-center text-white shadow-xl">
-          <svg class="w-6 h-6 stroke-current fill-none stroke-[2]" viewBox="0 0 24 24">
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-            <circle cx="8.5" cy="8.5" r="1.5"/>
-            <polyline points="21 15 16 10 5 21"/>
-          </svg>
-        </button>
-
-        <!-- Botón Slow-Motion -->
-        <div class="relative">
-          <button id="btnSlowMo" title="Ajuste Cámara Lenta" class="hud-glass hud-button w-14 h-14 rounded-full flex flex-col items-center justify-center text-white shadow-xl">
-            <svg class="w-5 h-5 stroke-current fill-none stroke-[2]" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-            </svg>
-            <span id="btnSlowMoLabel" class="text-[10px] font-mono font-bold mt-0.5 text-amber-400">1.0x</span>
-          </button>
-
-          <!-- Popover Slow-Motion -->
-          <div id="popoverSlowMo" class="hidden absolute bottom-16 left-1/2 -translate-x-1/2 w-64 p-4 rounded-2xl hud-glass shadow-2xl flex flex-col gap-3">
-            <div class="flex justify-between items-center text-xs font-semibold">
-              <span class="text-neutral-300">CÁMARA LENTA</span>
-              <span id="slowMoValueText" class="text-amber-400 font-mono text-sm font-bold">1.00x</span>
-            </div>
-            <input id="sliderSlowMo" type="range" min="0.25" max="1.0" step="0.05" value="1.0" class="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer">
-            <div class="flex justify-between text-[10px] text-neutral-400 font-mono">
-              <span>0.25x</span>
-              <span>0.50x</span>
-              <span>0.75x</span>
-              <span>1.00x</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Botón Central PLAY / STOP (Principal) -->
-        <button id="btnPlayStop" class="relative group pointer-events-auto flex items-center justify-center focus:outline-none">
-          <div class="w-20 h-20 rounded-full border-4 border-white/80 group-active:scale-95 transition-transform flex items-center justify-center hud-glass shadow-2xl">
-            <!-- Icono mutable: Grabando/Corriendo = cuadrado rojo; Detenido = círculo blanco -->
-            <div id="playStopInner" class="w-8 h-8 rounded-lg bg-red-500 transition-all duration-300 shadow-md"></div>
-          </div>
-        </button>
-
-        <!-- Botón Delay -->
-        <div class="relative">
-          <button id="btnDelay" title="Ajuste Delay" class="hud-glass hud-button w-14 h-14 rounded-full flex flex-col items-center justify-center text-white shadow-xl">
-            <svg class="w-5 h-5 stroke-current fill-none stroke-[2]" viewBox="0 0 24 24">
-              <circle cx="12" cy="12" r="9"/>
-              <polyline points="12 7 12 12 15 15"/>
-            </svg>
-            <span id="btnDelayLabel" class="text-[10px] font-mono font-bold mt-0.5 text-cyan-400">15s</span>
-          </button>
-
-          <!-- Popover Delay -->
-          <div id="popoverDelay" class="hidden absolute bottom-16 left-1/2 -translate-x-1/2 w-64 p-4 rounded-2xl hud-glass shadow-2xl flex flex-col gap-3">
-            <div class="flex justify-between items-center text-xs font-semibold">
-              <span class="text-neutral-300">RETARDO (DELAY)</span>
-              <span id="delayValueText" class="text-cyan-400 font-mono text-sm font-bold">15 s</span>
-            </div>
-            <input id="sliderDelay" type="range" min="10" max="120" step="1" value="15" class="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer">
-            <div class="flex justify-between text-[10px] text-neutral-400 font-mono">
-              <span>10s</span>
-              <span>30s</span>
-              <span>60s</span>
-              <span>120s</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Botón Grabar Clip a Disco Opcional -->
-        <button id="btnSaveClip" title="Guardar Clip Actual a Disco" class="hud-glass hud-button w-13 h-13 p-3 rounded-full flex flex-col items-center justify-center text-white shadow-xl">
-          <svg class="w-6 h-6 stroke-current fill-none stroke-[2]" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
-          </svg>
-        </button>
-      </div>
-
-      <!-- LÍNEA DE TIEMPO / JOG-WHEEL SCRUBBER -->
-      <div class="w-full max-w-2xl px-4 py-2.5 rounded-2xl hud-glass shadow-xl pointer-events-auto flex items-center gap-4">
-        <span class="text-[11px] font-mono text-neutral-400 w-12 text-right" id="timelineCurrentTime">-15.0s</span>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DelayCam Pro - Retraso de Video Ajustable</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --panel-bg: #1e293b;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --text: #f8fafc;
+            --danger: #ef4444;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        h1 { font-size: 1.5rem; margin-bottom: 1rem; color: #94a3b8; }
+        .container { width: 100%; max-width: 900px; display: flex; flex-direction: column; gap: 1rem; }
+        .video-container { position: relative; width: 100%; background: #000; border-radius: 12px; overflow: hidden; aspect-ratio: 16/9; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5); }
+        video { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .status-badge { position: absolute; top: 15px; left: 15px; background: rgba(0,0,0,0.7); padding: 6px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 8px; backdrop-filter: blur(4px); z-index: 10; }
         
-        <div class="relative flex-1 flex items-center">
-          <input id="timelineScrubber" type="range" min="0" max="15" step="0.1" value="0" class="timeline-scrubber w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer">
-        </div>
+        /* CORRECCIÓN VISUAL: El punto ahora es un círculo en lugar de una línea */
+        .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--danger); }
+        .dot.live { background: #22c55e; box-shadow: 0 0 10px #22c55e; }
+        
+        .controls-panel { background: var(--panel-bg); padding: 20px; border-radius: 12px; display: flex; flex-direction: column; gap: 15px; border: 1px solid #334155; }
+        .control-group { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+        label { font-size: 0.95rem; font-weight: 500; }
+        input[type="range"] { flex: 1; min-width: 200px; accent-color: var(--accent); height: 6px; border-radius: 3px; background: #475569; }
+        .btn-row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+        button { background: var(--accent); color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: background 0.2s; display: flex; align-items: center; gap: 6px; }
+        button:hover { background: var(--accent-hover); }
+        button.secondary { background: #475569; }
+        button.secondary:hover { background: #334155; }
+        button.danger { background: var(--danger); }
+        button.danger:hover { background: #dc2626; }
+        .value-display { font-variant-numeric: tabular-nums; font-weight: bold; color: var(--accent); min-width: 45px; text-align: right; }
+    </style>
+</head>
+<body>
 
-        <button id="btnGoLive" class="px-3.5 py-1.5 rounded-full bg-red-600/90 active:bg-red-500 text-[11px] font-black tracking-wider uppercase text-white shadow-lg flex items-center gap-1.5 transition-colors">
-          <span class="w-2 h-2 rounded-full bg-white live-dot"></span>
-          LIVE
-        </button>
-      </div>
-    </div>
-
-    <!-- MODAL: AJUSTES GENERALES -->
-    <div id="modalSettings" class="hidden absolute inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-50">
-      <div class="hud-glass w-full max-w-md rounded-3xl p-6 shadow-2xl border border-white/20 flex flex-col gap-5">
-        <div class="flex justify-between items-center border-b border-white/10 pb-3">
-          <h2 class="text-base font-bold tracking-wide flex items-center gap-2">
-            <svg class="w-5 h-5 text-cyan-400 stroke-current fill-none stroke-[2]" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
-            </svg>
-            Ajustes de Video Delay
-          </h2>
-          <button id="btnCloseSettings" class="text-neutral-400 hover:text-white p-1">✕</button>
-        </div>
-
-        <div class="flex flex-col gap-4 text-sm">
-          <!-- Resolución -->
-          <div class="flex justify-between items-center">
-            <label class="text-neutral-300">Resolución de Captura</label>
-            <select id="selectResolution" class="bg-neutral-800 text-white rounded-lg px-3 py-1.5 border border-white/20 text-xs">
-              <option value="720">HD 720p (Recomendado iPad)</option>
-              <option value="1080" selected>Full HD 1080p</option>
-              <option value="480">SD 480p (Bajo Consumo)</option>
-            </select>
-          </div>
-
-          <!-- Modo Solo Monitor (Sin saturar memoria) -->
-          <div class="flex justify-between items-center">
-            <div>
-              <div class="text-neutral-200 font-medium">Modo Solo Monitor</div>
-              <div class="text-[11px] text-neutral-400">Descarta clips antiguos automáticamente de RAM</div>
+    <div class="container">
+        <h1>DelayCam Pro - Análisis Diferido</h1>
+        
+        <div class="video-container">
+            <div class="status-badge">
+                <div id="statusDot" class="dot"></div>
+                <span id="statusText">Iniciando cámara...</span>
             </div>
-            <input id="toggleMonitorMode" type="checkbox" checked class="w-5 h-5 accent-cyan-400 rounded">
-          </div>
-
-          <!-- FPS Preferidos -->
-          <div class="flex justify-between items-center">
-            <label class="text-neutral-300">Cuadros por segundo (FPS)</label>
-            <select id="selectFps" class="bg-neutral-800 text-white rounded-lg px-3 py-1.5 border border-white/20 text-xs">
-              <option value="30" selected>30 FPS (Equilibrado)</option>
-              <option value="60">60 FPS (Mayor fluidez)</option>
-            </select>
-          </div>
-
-          <!-- Almacenamiento Estimado -->
-          <div class="bg-white/5 rounded-xl p-3 border border-white/5 text-xs text-neutral-300 flex justify-between">
-            <span>Uso de RAM aproximado (buffer circular):</span>
-            <span id="ramUsageEstimate" class="font-mono text-cyan-400 font-bold">~45 MB</span>
-          </div>
+            <!-- Video retrasado (salida principal) -->
+            <video id="delayedVideo" autoplay playsinline muted></video>
+            <!-- Video oculto para capturar el stream crudo -->
+            <video id="liveVideo" autoplay playsinline muted style="display:none;"></video>
         </div>
 
-        <button id="btnApplySettings" class="w-full py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 font-semibold text-xs tracking-wider uppercase transition-colors">
-          Guardar y Reiniciar Cámara
-        </button>
-      </div>
+        <div class="controls-panel">
+            <div class="control-group">
+                <label for="delayRange">Retraso de Visualización:</label>
+                <input type="range" id="delayRange" min="1" max="30" value="5" step="1">
+                <span class="value-display"><span id="delayVal">5</span>s</span>
+            </div>
+
+            <div class="btn-row">
+                <button id="btnPlayPause" class="secondary">⏸ Pausar Retraso</button>
+                <button id="btnStepBack" class="secondary">⏮ -1s</button>
+                <button id="btnStepForward" class="secondary">+1s ⏭</button>
+                <button id="btnLive" class="danger">🔴 Ir al Vivo</button>
+            </div>
+        </div>
     </div>
 
-    <!-- MODAL: CÁMARA EXTERNA / GOPRO -->
-    <div id="modalExternalCam" class="hidden absolute inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-50">
-      <div class="hud-glass w-full max-w-md rounded-3xl p-6 shadow-2xl border border-white/20 flex flex-col gap-5">
-        <div class="flex justify-between items-center border-b border-white/10 pb-3">
-          <h2 class="text-base font-bold tracking-wide flex items-center gap-2">
-            <svg class="w-5 h-5 text-cyan-400 stroke-current fill-none stroke-[2]" viewBox="0 0 24 24">
-              <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
-              <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
-            </svg>
-            Entrada Cámara GoPro / UVC
-          </h2>
-          <button id="btnCloseExternalCam" class="text-neutral-400 hover:text-white p-1">✕</button>
-        </div>
+    <script>
+        const liveVideo = document.getElementById('liveVideo');
+        const delayedVideo = document.getElementById('delayedVideo');
+        const delayRange = document.getElementById('delayRange');
+        const delayVal = document.getElementById('delayVal');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const btnPlayPause = document.getElementById('btnPlayPause');
+        const btnStepBack = document.getElementById('btnStepBack');
+        const btnStepForward = document.getElementById('btnStepForward');
+        const btnLive = document.getElementById('btnLive');
 
-        <div class="flex flex-col gap-3 text-sm">
-          <label class="text-xs text-neutral-300">Seleccionar dispositivo detectado (USB-C / HDMI UVC):</label>
-          <select id="selectDeviceList" class="bg-neutral-800 text-white rounded-xl p-2.5 border border-white/20 text-xs w-full"></select>
+        let mediaStream = null;
+        let mediaRecorder = null;
+        let recordedChunks = [];
+        let delayInSeconds = 5;
+        let isPaused = false;
 
-          <div class="text-[11px] text-neutral-400 leading-relaxed bg-white/5 p-3 rounded-xl border border-white/5">
-            💡 <strong>Consejo para entrenadores:</strong> Para cero latencia con GoPro en el borde de la pileta, conecta la salida Micro-HDMI de la GoPro a una capturadora USB-C Video UVC conectada a la tablet.
-          </div>
-        </div>
-
-        <button id="btnConnectExternalCam" class="w-full py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 font-semibold text-xs tracking-wider uppercase transition-colors">
-          Conectar Cámara
-        </button>
-      </div>
-    </div>
-
-    <!-- MODAL: GALERÍA DE CLIPS -->
-    <div id="modalGallery" class="hidden absolute inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 z-50">
-      <div class="hud-glass w-full max-w-3xl rounded-3xl p-6 shadow-2xl border border-white/20 flex flex-col gap-4 max-h-[85vh]">
-        <div class="flex justify-between items-center border-b border-white/10 pb-3">
-          <h2 class="text-base font-bold tracking-wide flex items-center gap-2">
-            <svg class="w-5 h-5 text-cyan-400 stroke-current fill-none stroke-[2]" viewBox="0 0 24 24">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-              <circle cx="8.5" cy="8.5" r="1.5"/>
-              <polyline points="21 15 16 10 5 21"/>
-            </svg>
-            Clips de Natación Guardados
-          </h2>
-          <button id="btnCloseGallery" class="text-neutral-400 hover:text-white p-1">✕</button>
-        </div>
-
-        <!-- Lista de videos guardados -->
-        <div id="galleryList" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 overflow-y-auto pr-1">
-          <!-- Elementos dinámicos -->
-          <div class="col-span-full py-12 text-center text-neutral-400 text-sm">
-            No hay grabaciones guardadas aún. Pulsa el botón de descargar para conservar una serie.
-          </div>
-        </div>
-      </div>
-    </div>
-
-  </div>
-
-  <!-- LÓGICA DE VIDEO DELAY, RECORDING Y SLOW-MOTION -->
-  <script>
-    /**
-     * Swim Delay Pro - Core Engine
-     * Desarrollado para alta eficiencia de memoria en iPadOS / Web
-     */
-
-    // Elementos DOM
-    const liveFeed = document.getElementById('liveFeed');
-    const delayedPlayback = document.getElementById('delayedPlayback');
-    const btnPlayStop = document.getElementById('btnPlayStop');
-    const playStopInner = document.getElementById('playStopInner');
-    const btnDelay = document.getElementById('btnDelay');
-    const btnDelayLabel = document.getElementById('btnDelayLabel');
-    const popoverDelay = document.getElementById('popoverDelay');
-    const sliderDelay = document.getElementById('sliderDelay');
-    const delayValueText = document.getElementById('delayValueText');
-    const delayBadge = document.getElementById('delayBadge');
-    
-    const btnSlowMo = document.getElementById('btnSlowMo');
-    const btnSlowMoLabel = document.getElementById('btnSlowMoLabel');
-    const popoverSlowMo = document.getElementById('popoverSlowMo');
-    const sliderSlowMo = document.getElementById('sliderSlowMo');
-    const slowMoValueText = document.getElementById('slowMoValueText');
-    const speedBadge = document.getElementById('speedBadge');
-
-    const btnFlipCamera = document.getElementById('btnFlipCamera');
-    const btnMirror = document.getElementById('btnMirror');
-    const btnSettings = document.getElementById('btnSettings');
-    const modalSettings = document.getElementById('modalSettings');
-    const btnCloseSettings = document.getElementById('btnCloseSettings');
-    const btnApplySettings = document.getElementById('btnApplySettings');
-
-    const btnExternalCam = document.getElementById('btnExternalCam');
-    const modalExternalCam = document.getElementById('modalExternalCam');
-    const btnCloseExternalCam = document.getElementById('btnCloseExternalCam');
-    const selectDeviceList = document.getElementById('selectDeviceList');
-    const btnConnectExternalCam = document.getElementById('btnConnectExternalCam');
-
-    const btnGallery = document.getElementById('btnGallery');
-    const modalGallery = document.getElementById('modalGallery');
-    const btnCloseGallery = document.getElementById('btnCloseGallery');
-    const galleryList = document.getElementById('galleryList');
-    const btnSaveClip = document.getElementById('btnSaveClip');
-
-    const timelineScrubber = document.getElementById('timelineScrubber');
-    const timelineCurrentTime = document.getElementById('timelineCurrentTime');
-    const btnGoLive = document.getElementById('btnGoLive');
-
-    const statusBadge = document.getElementById('statusBadge');
-    const statusText = document.getElementById('statusText');
-    const recordIndicator = document.getElementById('recordIndicator');
-    const ramUsageEstimate = document.getElementById('ramUsageEstimate');
-
-    // Configuración y Estado
-    let stream = null;
-    let mediaRecorder = null;
-    let isRunning = true;
-    let isMirrored = false;
-    let currentFacingMode = 'environment'; // 'user' o 'environment'
-    let selectedDeviceId = null;
-    let targetDelay = 15; // Segundos (10 a 120)
-    let slowMoRate = 1.0; // 0.25 a 1.0 (múltiplos de 0.05)
-    
-    // Motor de Chunks de Video (Búfer Circular de Fragmentos)
-    // Cada chunk corresponde a un segmento temporal comprimido de hardware
-    const CHUNK_INTERVAL_MS = 1000; // 1 segundo por chunk
-    let videoChunks = []; // Array de { timestamp: number, blob: Blob, url: string }
-    let playbackTimeout = null;
-    let currentPlayingIndex = 0;
-    let savedClips = [];
-
-    // Ajustes
-    let configResolution = 1080;
-    let configFps = 30;
-    let isMonitorOnly = true;
-
-    // Inicializar Cámara
-    async function initCamera() {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-      }
-
-      const constraints = {
-        audio: false,
-        video: {
-          width: { ideal: configResolution === 1080 ? 1920 : (configResolution === 720 ? 1280 : 854) },
-          height: { ideal: configResolution === 1080 ? 1080 : (configResolution === 720 ? 720 : 480) },
-          frameRate: { ideal: configFps }
+        async function initCamera() {
+            try {
+                mediaStream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
+                    audio: false
+                });
+                liveVideo.srcObject = mediaStream;
+                startBufferRecording();
+                statusDot.classList.add('live');
+                statusText.innerText = `Retraso Activo (${delayInSeconds}s)`;
+            } catch (err) {
+                console.error("Error al acceder a la cámara:", err);
+                statusText.innerText = "Error de cámara. Verifica permisos.";
+            }
         }
-      };
 
-      if (selectedDeviceId) {
-        constraints.video.deviceId = { exact: selectedDeviceId };
-      } else {
-        constraints.video.facingMode = { ideal: currentFacingMode };
-      }
+        function startBufferRecording() {
+            try {
+                mediaRecorder = new MediaRecorder(mediaStream, { mimeType: 'video/webm; codecs=vp8' });
+                
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data && event.data.size > 0) {
+                        recordedChunks.push({
+                            blob: event.data,
+                            timestamp: Date.now()
+                        });
+                        cleanOldChunks();
+                    }
+                };
+                mediaRecorder.start(1000); 
+                startPlaybackLoop();
+            } catch (e) {
+                console.error("MediaRecorder no soportado con VP8, intentando predeterminado", e);
+                mediaRecorder = new MediaRecorder(mediaStream);
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data && event.data.size > 0) {
+                        recordedChunks.push({ blob: event.data, timestamp: Date.now() });
+                        cleanOldChunks();
+                    }
+                };
+                mediaRecorder.start(1000);
+                startPlaybackLoop();
+            }
+        }
 
-      try {
-        stream = await navigator.mediaDevices.getUserMedia(constraints);
-        liveFeed.srcObject = stream;
-        await liveFeed.play();
-        startCircularBuffer();
-        updateDeviceList();
-      } catch (err) {
-        console.error("Error al acceder a la cámara:", err);
-        statusText.textContent = "ERROR CÁMARA";
-        recordIndicator.className = "w-3 h-3 rounded-full bg-red-500";
-      }
-    }
+        function cleanOldChunks() {
+            const now = Date.now();
+            const maxRetentionTime = (delayInSeconds + 15) * 1000; 
+            recordedChunks = recordedChunks.filter(chunk => (now - chunk.timestamp) <= maxRetentionTime);
+        }
 
-    // Actualizar lista de dispositivos (USB / Cámaras externas)
-    async function updateDeviceList() {
-      try {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const videoDevices = devices.filter(d => d.kind === 'videoinput');
-        selectDeviceList.innerHTML = '';
-        videoDevices.forEach((device, idx) => {
-          const opt = document.createElement('option');
-          opt.value = device.deviceId;
-          opt.textContent = device.label || `Cámara ${idx + 1} (${device.deviceId.slice(0, 5)}...)`;
-          selectDeviceList.appendChild(opt);
+        // CORRECCIÓN LÓGICA: Inyección de video y gestión del reproductor
+        function startPlaybackLoop() {
+            let lastPlayedTimestamp = 0; 
+            
+            setInterval(() => {
+                if (isPaused) return;
+
+                const targetTime = Date.now() - (delayInSeconds * 1000);
+                const validChunks = recordedChunks.filter(chunk => chunk.timestamp <= targetTime);
+                
+                if (validChunks.length > 0) {
+                    const chunkToPlay = validChunks[validChunks.length - 1];
+                    
+                    if (chunkToPlay.timestamp !== lastPlayedTimestamp) {
+                        const videoUrl = URL.createObjectURL(chunkToPlay.blob);
+                        
+                        // Liberar memoria del objeto anterior para evitar fugas en iPadOS
+                        if (delayedVideo.src) {
+                            URL.revokeObjectURL(delayedVideo.src);
+                        }
+
+                        delayedVideo.src = videoUrl;
+                        delayedVideo.load();
+                        
+                        delayedVideo.play().catch(err => {
+                            console.error("Autoplay bloqueado. Requiere interacción previa del usuario:", err);
+                        });
+                        
+                        lastPlayedTimestamp = chunkToPlay.timestamp;
+                    }
+                }
+            }, 500);
+        }
+
+        // Controles de UI actualizados
+        function updateDelayUI(newDelay) {
+            // Limitar entre 1 y 30 segundos según el rango del input
+            delayInSeconds = Math.max(1, Math.min(30, newDelay)); 
+            delayRange.value = delayInSeconds;
+            delayVal.innerText = delayInSeconds;
+            
+            if (!isPaused) {
+                statusText.innerText = `Retraso Activo (${delayInSeconds}s)`;
+            }
+        }
+
+        delayRange.addEventListener('input', (e) => {
+            updateDelayUI(parseInt(e.target.value));
         });
-      } catch (e) {
-        console.warn("No se pudieron listar dispositivos:", e);
-      }
-    }
 
-    // Iniciar Motor de Grabación y Búfer Circular
-    function startCircularBuffer() {
-      if (!stream) return;
+        btnStepBack.addEventListener('click', () => {
+            updateDelayUI(delayInSeconds - 1);
+        });
 
-      // Limpiar datos previos
-      clearBuffer();
+        btnStepForward.addEventListener('click', () => {
+            updateDelayUI(delayInSeconds + 1);
+        });
 
-      // Determinar codec soportado en iOS / iPadOS Safari (MP4 / WebM)
-      let mimeType = 'video/mp4;codecs=avc1';
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        mimeType = 'video/webm;codecs=vp8';
-        if (!MediaRecorder.isTypeSupported(mimeType)) {
-          mimeType = ''; // Formato por defecto del sistema
-        }
-      }
+        btnLive.addEventListener('click', () => {
+            updateDelayUI(1); // Mínimo retraso posible
+            statusText.innerText = "Casi en vivo (1s)";
+            if (isPaused) {
+                btnPlayPause.click(); // Reanuda si estaba en pausa
+            }
+        });
 
-      const options = mimeType ? { mimeType } : {};
-      
-      try {
-        mediaRecorder = new MediaRecorder(stream, options);
-      } catch (e) {
-        console.error("MediaRecorder sin soporte para el mimeType:", e);
-        mediaRecorder = new MediaRecorder(stream);
-      }
+        btnPlayPause.addEventListener('click', () => {
+            isPaused = !isPaused;
+            if (isPaused) {
+                btnPlayPause.innerHTML = "▶ Reanudar";
+                statusText.innerText = `Pausado / Congelado (${delayInSeconds}s)`;
+                statusDot.classList.remove('live');
+                delayedVideo.pause();
+            } else {
+                btnPlayPause.innerHTML = "⏸ Pausar Retraso";
+                statusText.innerText = `Retraso Activo (${delayInSeconds}s)`;
+                statusDot.classList.add('live');
+            }
+        });
 
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data && event.data.size > 0 && isRunning) {
-          const now = Date.now();
-          const chunkUrl = URL.createObjectURL(event.data);
-          videoChunks.push({
-            timestamp: now,
-            blob: event.data,
-            url: chunkUrl,
-            size: event.data.size
-          });
-
-          // Purgar chunks viejos para no saturar la memoria RAM del iPad (Búfer circular)
-          const maxAllowedAgeMs = (targetDelay + 25) * 1000; // Delay deseado + margen de seguridad
-          while (videoChunks.length > 2 && (now - videoChunks[0].timestamp > maxAllowedAgeMs)) {
-            const oldChunk = videoChunks.shift();
-            URL.revokeObjectURL(oldChunk.url);
-          }
-
-          updateBufferStatus();
-          evaluatePlayback();
-        }
-      };
-
-      mediaRecorder.start(CHUNK_INTERVAL_MS);
-      statusText.textContent = "BUFFER ACTIVO";
-      recordIndicator.className = "w-3 h-3 rounded-full bg-emerald-500 live-dot";
-    }
-
-    // Evaluar inicio o sincronización del delayedPlayback
-    function evaluatePlayback() {
-      if (videoChunks.length === 0) return;
-
-      const bufferDuration = (videoChunks[videoChunks.length - 1].timestamp - videoChunks[0].timestamp) / 1000;
-      
-      // Actualizar rango del scrubber
-      timelineScrubber.max = Math.max(10, Math.floor(bufferDuration));
-      
-      if (bufferDuration < targetDelay) {
-        const remaining = Math.ceil(targetDelay - bufferDuration);
-        statusText.textContent = `ACUMULANDO: ${remaining}s`;
-        recordIndicator.className = "w-3 h-3 rounded-full bg-amber-400 live-dot";
-      } else {
-        statusText.textContent = "TRANSMITIENDO EN RETARDO";
-        recordIndicator.className = "w-3 h-3 rounded-full bg-cyan-400 live-dot";
-
-        // Si el reproductor no está activo o terminó, alimentar con el segmento retrasado
-        if (delayedPlayback.paused || delayedPlayback.ended || !delayedPlayback.src) {
-          playDelayedChunk();
-        }
-      }
-    }
-
-    // Reproduce el fragmento correspondiente al retardo
-    function playDelayedChunk() {
-      if (videoChunks.length === 0) return;
-
-      const now = Date.now();
-      const targetTimestamp = now - (targetDelay * 1000);
-
-      // Buscar el chunk más cercano al tiempo deseado
-      let bestIndex = 0;
-      let minDiff = Infinity;
-      for (let i = 0; i < videoChunks.length; i++) {
-        const diff = Math.abs(videoChunks[i].timestamp - targetTimestamp);
-        if (diff < minDiff) {
-          minDiff = diff;
-          bestIndex = i;
-        }
-      }
-
-      currentPlayingIndex = bestIndex;
-      const currentChunk = videoChunks[bestIndex];
-
-      if (currentChunk && delayedPlayback.src !== currentChunk.url) {
-        delayedPlayback.src = currentChunk.url;
-        delayedPlayback.playbackRate = slowMoRate;
-        delayedPlayback.play().catch(e => console.warn("Auto-play esperando interacción:", e));
-      }
-    }
-
-    // Encadenar reproducción continua de los siguientes chunks
-    delayedPlayback.onended = () => {
-      currentPlayingIndex++;
-      if (currentPlayingIndex < videoChunks.length) {
-        delayedPlayback.src = videoChunks[currentPlayingIndex].url;
-        delayedPlayback.playbackRate = slowMoRate;
-        delayedPlayback.play().catch(e => console.warn(e));
-      } else {
-        // Alcanzó el final del buffer actual
-        setTimeout(playDelayedChunk, 250);
-      }
-    };
-
-    // Actualizar estimación de memoria RAM usada
-    function updateBufferStatus() {
-      let totalBytes = 0;
-      for (const c of videoChunks) {
-        totalBytes += c.size;
-      }
-      const mb = (totalBytes / (1024 * 1024)).toFixed(1);
-      ramUsageEstimate.textContent = `~${mb} MB (${videoChunks.length} chunks)`;
-    }
-
-    // Limpieza de buffer
-    function clearBuffer() {
-      videoChunks.forEach(c => URL.revokeObjectURL(c.url));
-      videoChunks = [];
-    }
-
-    // INTERACCIONES Y EVENTOS
-
-    // 1. Play / Stop
-    btnPlayStop.addEventListener('click', () => {
-      isRunning = !isRunning;
-      if (isRunning) {
-        playStopInner.className = "w-8 h-8 rounded-lg bg-red-500 transition-all duration-300 shadow-md";
-        statusText.textContent = "TRANSMITIENDO EN RETARDO";
-        recordIndicator.className = "w-3 h-3 rounded-full bg-cyan-400 live-dot";
-        if (mediaRecorder && mediaRecorder.state === 'inactive') {
-          mediaRecorder.start(CHUNK_INTERVAL_MS);
-        }
-        delayedPlayback.play().catch(() => {});
-      } else {
-        playStopInner.className = "w-8 h-8 rounded-full bg-white transition-all duration-300 shadow-md";
-        statusText.textContent = "DETENIDO";
-        recordIndicator.className = "w-3 h-3 rounded-full bg-neutral-500";
-        if (mediaRecorder && mediaRecorder.state === 'recording') {
-          mediaRecorder.stop();
-        }
-        delayedPlayback.pause();
-      }
-    });
-
-    // 2. Control de Delay (10 a 120 seg)
-    btnDelay.addEventListener('click', (e) => {
-      e.stopPropagation();
-      popoverDelay.classList.toggle('hidden');
-      popoverSlowMo.classList.add('hidden');
-    });
-
-    sliderDelay.addEventListener('input', (e) => {
-      targetDelay = parseInt(e.target.value);
-      delayValueText.textContent = `${targetDelay} s`;
-      btnDelayLabel.textContent = `${targetDelay}s`;
-      delayBadge.textContent = `DELAY: ${targetDelay}s`;
-      timelineCurrentTime.textContent = `-${targetDelay}.0s`;
-      timelineScrubber.value = 0;
-      playDelayedChunk();
-    });
-
-    // 3. Control de Slow-Motion (0.25 a 1.0 en saltos de 0.05)
-    btnSlowMo.addEventListener('click', (e) => {
-      e.stopPropagation();
-      popoverSlowMo.classList.toggle('hidden');
-      popoverDelay.classList.add('hidden');
-    });
-
-    sliderSlowMo.addEventListener('input', (e) => {
-      // Redondear a múltiplos de 0.05
-      const rawVal = parseFloat(e.target.value);
-      slowMoRate = Math.round(rawVal / 0.05) * 0.05;
-      slowMoRate = parseFloat(slowMoRate.toFixed(2));
-      
-      slowMoValueText.textContent = `${slowMoRate.toFixed(2)}x`;
-      btnSlowMoLabel.textContent = `${slowMoRate.toFixed(2)}x`;
-      speedBadge.textContent = `${slowMoRate.toFixed(2)}x`;
-      
-      delayedPlayback.playbackRate = slowMoRate;
-    });
-
-    // Cerrar popovers al tocar fuera
-    document.addEventListener('click', (e) => {
-      if (!popoverDelay.contains(e.target) && !btnDelay.contains(e.target)) {
-        popoverDelay.classList.add('hidden');
-      }
-      if (!popoverSlowMo.contains(e.target) && !btnSlowMo.contains(e.target)) {
-        popoverSlowMo.classList.add('hidden');
-      }
-    });
-
-    // 4. Alternar Cámara Frontal / Trasera
-    btnFlipCamera.addEventListener('click', async () => {
-      selectedDeviceId = null;
-      currentFacingMode = (currentFacingMode === 'environment') ? 'user' : 'environment';
-      await initCamera();
-    });
-
-    // 5. Modo Espejo
-    btnMirror.addEventListener('click', () => {
-      isMirrored = !isMirrored;
-      delayedPlayback.classList.toggle('mirrored', isMirrored);
-    });
-
-    // 6. Timeline Scrubber / Jog Wheel
-    timelineScrubber.addEventListener('input', (e) => {
-      const offsetSeconds = parseFloat(e.target.value);
-      timelineCurrentTime.textContent = `-${(targetDelay - offsetSeconds).toFixed(1)}s`;
-      
-      // Buscar el frame en el búfer
-      const targetTime = Date.now() - ((targetDelay - offsetSeconds) * 1000);
-      let bestIndex = 0;
-      let minDiff = Infinity;
-      for (let i = 0; i < videoChunks.length; i++) {
-        const diff = Math.abs(videoChunks[i].timestamp - targetTime);
-        if (diff < minDiff) {
-          minDiff = diff;
-          bestIndex = i;
-        }
-      }
-      if (videoChunks[bestIndex]) {
-        currentPlayingIndex = bestIndex;
-        delayedPlayback.src = videoChunks[bestIndex].url;
-        delayedPlayback.playbackRate = slowMoRate;
-        delayedPlayback.play().catch(() => {});
-      }
-    });
-
-    // Botón LIVE (Volver al tiempo real / delay configurado)
-    btnGoLive.addEventListener('click', () => {
-      timelineScrubber.value = 0;
-      timelineCurrentTime.textContent = `-${targetDelay}.0s`;
-      playDelayedChunk();
-    });
-
-    // 7. Ajustes
-    btnSettings.addEventListener('click', () => modalSettings.classList.remove('hidden'));
-    btnCloseSettings.addEventListener('click', () => modalSettings.classList.add('hidden'));
-    btnApplySettings.addEventListener('click', async () => {
-      configResolution = parseInt(document.getElementById('selectResolution').value);
-      configFps = parseInt(document.getElementById('selectFps').value);
-      isMonitorOnly = document.getElementById('toggleMonitorMode').checked;
-      modalSettings.classList.add('hidden');
-      await initCamera();
-    });
-
-    // 8. Cámara Externa / GoPro
-    btnExternalCam.addEventListener('click', async () => {
-      await updateDeviceList();
-      modalExternalCam.classList.remove('hidden');
-    });
-    btnCloseExternalCam.addEventListener('click', () => modalExternalCam.classList.add('hidden'));
-    btnConnectExternalCam.addEventListener('click', async () => {
-      selectedDeviceId = selectDeviceList.value;
-      modalExternalCam.classList.add('hidden');
-      await initCamera();
-    });
-
-    // 9. Galería y Guardar Clip
-    btnSaveClip.addEventListener('click', () => {
-      if (videoChunks.length === 0) return;
-
-      // Unir los últimos 10 chunks o todo el buffer actual en un solo video
-      const clipBlobs = videoChunks.slice(-15).map(c => c.blob);
-      const fullBlob = new Blob(clipBlobs, { type: clipBlobs[0].type });
-      const clipUrl = URL.createObjectURL(fullBlob);
-      const timestamp = new Date().toLocaleTimeString();
-
-      savedClips.unshift({
-        url: clipUrl,
-        time: timestamp,
-        blob: fullBlob
-      });
-
-      // Feedback visual rápido
-      btnSaveClip.classList.add('bg-emerald-600');
-      setTimeout(() => btnSaveClip.classList.remove('bg-emerald-600'), 400);
-
-      renderGallery();
-    });
-
-    btnGallery.addEventListener('click', () => {
-      renderGallery();
-      modalGallery.classList.remove('hidden');
-    });
-    btnCloseGallery.addEventListener('click', () => modalGallery.classList.add('hidden'));
-
-    function renderGallery() {
-      if (savedClips.length === 0) {
-        galleryList.innerHTML = `
-          <div class="col-span-full py-12 text-center text-neutral-400 text-sm">
-            No hay grabaciones guardadas aún. Pulsa el botón de descarga en el HUD para registrar un clip.
-          </div>
-        `;
-        return;
-      }
-
-      galleryList.innerHTML = '';
-      savedClips.forEach((clip, index) => {
-        const item = document.createElement('div');
-        item.className = "bg-white/5 rounded-2xl p-3 border border-white/10 flex flex-col gap-2";
-        item.innerHTML = `
-          <video src="${clip.url}" class="w-full h-32 object-cover rounded-xl bg-black" controls playsinline></video>
-          <div class="flex justify-between items-center text-xs px-1">
-            <span class="font-mono text-neutral-300">Clip #${savedClips.length - index} (${clip.time})</span>
-            <a href="${clip.url}" download="natacion_clip_${Date.now()}.mp4" class="px-2.5 py-1 rounded-lg bg-cyan-600 hover:bg-cyan-500 font-bold text-[10px] uppercase tracking-wider text-white">
-              Descargar
-            </a>
-          </div>
-        `;
-        galleryList.appendChild(item);
-      });
-    }
-
-    // Inicialización al cargar la ventana
-    window.addEventListener('DOMContentLoaded', () => {
-      initCamera();
-    });
-  </script>
+        // Iniciar la cámara al cargar la página
+        initCamera();
+    </script>
 </body>
 </html>
